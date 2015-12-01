@@ -12,7 +12,10 @@ The web server was configured with the following packages:
 #### ntp
 #### apache2
 #### libapache2-mod-wsgi
+#### python-pip
+#### flask
 #### postgresql
+#### postgresql-contrib
 #### git
 
 ## Third-Party Resources
@@ -22,6 +25,8 @@ The web server was configured with the following packages:
 - [fail2ban](https://www.digitalocean.com/community/tutorials/how-to-protect-ssh-with-fail2ban-on-ubuntu-14-04) and [fail2ban ufw Config](http://askubuntu.com/questions/54771/potential-ufw-and-fail2ban-conflicts)
 - [NTP](https://help.ubuntu.com/lts/serverguide/NTP.html)
 - [Deploy WSGI on Apache](http://flask.pocoo.org/docs/0.10/deploying/mod_wsgi/)
+- [Deploy Flask app on aws ec2](http://www.datasciencebytes.com/bytes/2015/02/24/running-a-flask-app-on-aws-ec2/)
+- [PostgreSQL](https://help.ubuntu.com/community/PostgreSQL)
 
 <!-- Resource Links -->
 [1]:http://ec2-52-32-196-18.us-west-2.compute.amazonaws.com/
