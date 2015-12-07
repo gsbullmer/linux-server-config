@@ -1,4 +1,5 @@
-# linux-server-config
+# Linux Web Server Configuration
+
 This is the fifth project in the Udacity Full Stack Web Developer Nanodegree program. In this project, a Linux web server was created and configured.
 
 There are two main parts:
@@ -42,39 +43,218 @@ I used the following resources to help set up the server correctly:
 
 ## Setup the Server
 This step-by-step guide will walk you through the server setup
-### Step 1
-Launch your Virtual Machine with your Udacity account. Please note that upon graduation from the program your free Amazon AWS instance will no longer be available.
 
-### Step 2
-Follow the instructions provided to SSH into your server
+### The Virtual Machine
+Udacity provided a virtual server through Amazon EC2.
 
-### Step 3
-Create a new user named grader
+### SSH
+Use the udacity_key.rsa provided to log into the Udacity-provided AWS VM. To log into the AWS VM:
+```bash
+ssh root@52.32.196.18 -i ~/.ssh/udacity_key.rsa
+```
 
-### Step 4
-Give the grader the permission to sudo
+### Create New User
+Once logged in, create a new user called `grader`. To create this user, type:
+```bash
+adduser grader
+```
 
-### Step 5
-Update all currently installed packages
+Don't worry about giving the user user a strong password; passwords will be disabled in favor of SSH access. Fill out the user details if desired.
 
-### Step 6
-Change the SSH port from 22 to 2200
+### Grant sudo Access
+This new user needs `sudo` access. Type:
 
-### Step 7
-Configure the Uncomplicated Firewall (UFW) to only allow incoming connections for SSH (port 2200), HTTP (port 80), and NTP (port 123)
+```bash
+touch /etc/sudoers.d/grader
+nano /etc/sudoers.d/grader
+```
 
-### Step 8
-Configure the local timezone to UTC
+In this file, add the line:
+```
+grader ALL=(ALL) NOPASSWD:ALL
+```
 
-### Step 9
-Install and configure Apache to serve a Python mod_wsgi application
+This will add the user `grader` as a sudoer without the need to provide a password.
 
-### Step 10
+### Configure SSH for New User
+Next, add the ssh authorized key for the new user. Temporarily log in as the new user:
+```bash
+sudo -su grader
+```
+
+Create the `.ssh` directory and the `authorized_keys` file:
+```bash
+cd /home/grader
+mkdir .ssh
+touch .ssh/authorized_keys
+nano .ssh/authorized_keys
+```
+
+Add this public key, which is paired with `udacity_key.rsa`:
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDEmB6XaSRvn9MXwPw/FRHA5bVM4ex0hNfZDLq8xGX05HCmr4ErsWJ9/1EhnPEVeAnMhXwKDhAQ4iDxaVt/7tHa05vmRIbfL66uk2vjzt5Hsk5GvjD1bAQ23rTcmqbUQAjjF50+DngyN8NHNJde87K6qo33UyRMyJ3o+gkllaKd578I4qNSEJ92V2m6h3+k+dYVCKJiInZWGBix4zp3GDJmbzlDxgv+kJO5ExPPNeoq4ddKDtOzFYIun/iUUPSTpSnm1UiZreNvBsUT0xDtUX/iew4414VOyBD9ac2IdthSx0ujvLGPVHujSe1BA1PNmigo+KGHUtBwpfsyFQs9zTQr Udacity Student
+```
+
+Set the ssh file permissions:
+```bash
+chmod 700 .ssh
+chmod 644 .ssh/authorized_keys
+```
+
+In a new terminal window, log in to `grader` with the rsa key:
+```bash
+ssh grader@52.32.196.18 -i ~/.ssh/udacity_key.rsa
+```
+
+**NOTE:** Be sure this can be done before logging out of `root`.
+
+### Update Packages
+Update all currently installed packages by typing:
+```bash
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get dist-upgrade
+```
+
+To allow automatic security updates, install the `unattended-upgrades` package, if not installed:
+```bash
+sudo apt-get install unattended-upgrades
+```
+
+To enable unattended-upgrades, type:
+```bash
+sudo dpkg-reconfigure --priority-low unattended-upgrades
+```
+
+### SSH Config
+Change the SSH port from `22` to `2200`, remove root login, and force users to use key-based authentication only by modifying `/etc/ssh/sshd_config`:
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+#### Change SSH Port
+Change the following line (extra lines removed for readablility):
+```
+# What ports, IPs and protocols we listen for
+Port 2200
+```
+
+#### Remove Root Login
+Change the following line (extra lines removed for readablility):
+```
+# Authentication:
+PermitRootLogin no
+```
+
+#### Force SSH Login
+Change the following line (extra lines removed for readablility):
+```
+# Change to no to disable tunnelled clear text passwords
+PasswordAuthentication no
+```
+
+#### Restart SSH Service
+Restart the `ssh` service for the changes to take effect:
+```bash
+sudo service ssh restart
+```
+**NOTE:** Be sure to have the ability to log in to `grader` before logging out of `root`.
+
+### Configure Firewall
+Configure the Uncomplicated Firewall (UFW) to only allow incoming connections for SSH (port 2200), HTTP (port 80), and NTP (port 123):
+```bash
+sudo ufw default deny incoming
+sudo ufw allow 2200
+sudo ufw allow 80
+sudo ufw allow 123
+sudo ufw enable
+```
+
+### Firewall Monitoring
+Configure `fail2ban`, which will automatically block IP addresses that fail to correctly log in multiple times. First, install `fail2ban`:
+```bash
+sudo apt-get install fail2ban
+```
+
+Next, configure a local copy of the `jail.conf`:
+```bash
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+sudo nano /etc/fail2ban/jail.local
+```
+
+Update the following section:
+```
+[ssh]
+
+enabled  = true
+banaction = ufw-ssh
+port     = 2200
+filter   = sshd
+logpath  = /var/log/auth.log
+maxretry = 3
+```
+This will enable the ssh jail, set the ban action to the new action `ufw-ssh` that will be defined below, listen on port `2200` instead of the default ssh port, and allows a max of `3` attempts to log in before the ban action triggering.
+
+Next, create the `ufw-ssh` action referenced above:
+```bash
+sudo touch /etc/fail2ban/action.d/ufw-ssh.conf
+sudo nano /etc/fail2ban/action.d/ufw-ssh.conf
+```
+
+Define the action as follows:
+```
+[Definition]
+actionstart =
+actionstop =
+actioncheck =
+actionban = ufw insert 1 deny from <ip> to any app OpenSSH
+actionunban = ufw delete deny from <ip> to any app OpenSSH
+```
+
+Finally, restart `fail2ban`:
+```bash
+sudo service fail2ban restart
+```
+
+### Set Local Timezone
+To set the system to use UTC, install `ntp`:
+```bash
+sudo apt-get install ntp
+```
+
+### Apache2 and mod_wsgi
+Install the Apache2 web server and wsgi module:
+```bash
+sudo apt-get install apache2 libapache2-mod-wsgi
+```
+
+### PostgreSQL
 Install and configure PostgreSQL:
-- Do not allow remote connections
-- Create a new user named catalog that has limited permissions to your catalog application database
+```bash
+sudo apt-get install postgresql postgresql-contrib
+```
+#### Create Users and Database
+Login to postgreSQL as `postgres`:
+```bash
+sudo -u postgres psql
+```
 
-### Step 11
+Next, create a new postgres user named `ibgdb_mod` without login privileges, and another postgres user named `ibgdb` with login privileges in the role `ibgdb_mod`:
+```pgsql
+CREATE ROLE ibgdb_mod;
+CREATE ROLE ibgdb WITH LOGIN IN ROLE ibgdb_mod;
+```
+
+Now, create the `ibgdb` database, owned by `ibgdb_mod`:
+```pgsql
+CREATE DATABASE ibgdb OWNER ibgdb_mod;
+```
+
+#### Create Unix User
+
+#### Disable Remote Login
+
+### Deploy Web App
 Install git, clone and setup your Catalog App project (from your GitHub repository from earlier in the Nanodegree program) so that it functions correctly when visiting your server’s IP address in a browser. Remember to set this up appropriately so that your .git directory is not publicly accessible via a browser!
 
 <!-- Resource Links -->
