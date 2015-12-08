@@ -323,6 +323,8 @@ Restart the apache service:
 sudo service apache2 restart
 ```
 
+Finally, check that the web app is running by visiting [http://ec2-52-32-196-18.us-west-2.compute.amazonaws.com/][1.0].
+
 <!-- Resource Links -->
 [1.0]:http://ec2-52-32-196-18.us-west-2.compute.amazonaws.com/
 
