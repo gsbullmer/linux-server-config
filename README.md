@@ -27,9 +27,10 @@ The web server was configured with the following packages:
 - python-flask
 - python-flask-sqlalchemy
 - python-psycopg2
+- python-oauth2client
 
 ### Third-Party Resources
-I used the following resources to help set up the server correctly:
+The following resources were used to help set up the server correctly:
 - [Server Config Walkthrough][3.0]
 - [Automatic Security Updates][3.1]
 - [Disable root login][3.2]
@@ -42,7 +43,7 @@ I used the following resources to help set up the server correctly:
 - [Secure PostgreSQL on Ubuntu][3.9]
 
 ## Setup the Server
-This step-by-step guide will walk you through the server setup
+This step-by-step guide explains everything that was done to setup the server.
 
 ### The Virtual Machine
 Udacity provided a virtual server through Amazon EC2.
@@ -233,16 +234,17 @@ Install and configure PostgreSQL:
 ```bash
 sudo apt-get install postgresql postgresql-contrib
 ```
-#### Create Users and Database
+
 Login to postgreSQL as `postgres`:
 ```bash
 sudo -u postgres psql
 ```
 
-Next, create a new postgres user named `ibgdb_mod` without login privileges, and another postgres user named `ibgdb` with login privileges in the role `ibgdb_mod`:
+#### Create Users and Database
+It's common practice to assign a distinct role for each application. It's also good practice to separate users from functions, further securing permissions. Create a new postgres user (role with login privileges) named `ibgdb`, and a postgres group (role without login privileges) named `ibgdb_mod` with user membership `ibgdb`.  To do this, type:
 ```pgsql
-CREATE ROLE ibgdb_mod;
-CREATE ROLE ibgdb WITH LOGIN IN ROLE ibgdb_mod;
+CREATE ROLE ibgdb LOGIN;
+CREATE ROLE ibgdb_mod WITH ROLE ibgdb;
 ```
 
 Now, create the `ibgdb` database, owned by `ibgdb_mod`:
@@ -250,12 +252,76 @@ Now, create the `ibgdb` database, owned by `ibgdb_mod`:
 CREATE DATABASE ibgdb OWNER ibgdb_mod;
 ```
 
-#### Create Unix User
+Lock down permissions to this database to only let `ibgdb_mod` create tables:
+```pgsql
+\c ibgdb
+REVOKE ALL ON SCHEMA public FROM public;
+GRANT ALL ON SCHEMA public TO ibgdb_mod;
+```
 
 #### Disable Remote Login
+Open `/etc/postgresql/9.3/main/pg_hba.conf`:
+```bash
+sudo nano /etc/postgresql/9.3/main/pg_hba.conf
+```
+
+Add the following rule:
+```
+# "local" is for Unix domain socket connections only
+local   sameuser        ibgdb                                   trust
+```
+This will not ask for a password when connecting to the `ibgdb` database with user `ibgdb` since this is only allowed on a local connection.
+
+Finally, restart the postgresql service:
+```bash
+sudo service postgresql restart
+```
 
 ### Deploy Web App
-Install git, clone and setup your Catalog App project (from your GitHub repository from earlier in the Nanodegree program) so that it functions correctly when visiting your server’s IP address in a browser. Remember to set this up appropriately so that your .git directory is not publicly accessible via a browser!
+Install `git` if not already installed:
+```bash
+sudo apt-get install git
+```
+
+Install the web app framework packages:
+```bash
+sudo apt-get install python-flask python-flask-sqlalchemy python-psycopg2 python-oauth2client
+```
+
+Clone the web app into the home directory and link it to the apache doc root:
+```bash
+git clone -b production --single-branch https://github.com/gsbullmer/catalog.git ibgdb
+sudo ln -sT ~/ibgdb /var/www/html/ibgdb
+```
+
+Configure apache and wsgi to run the web app:
+```bash
+sudo nano /etc/apache2/sites-enabled/000-default.conf
+```
+
+Make the following additions (some lines removed for readability):
+```
+<VirtualHost *:80>
+  ...
+  DocumentRoot /var/www/html
+
+  WSGIDaemonProcess ibgdb threads=5
+  WSGIScriptAlias / /var/www/html/ibgdb/ibgdb.wsgi
+
+  <Directory ibgdb>
+    WSGIProcessGroup ibgdb
+    WSGIApplicationGroup %{GLOBAL}
+    Order deny,allow
+    Allow from all
+  </Directory>
+  ...
+</VirtualHost>
+```
+
+Restart the apache service:
+```bash
+sudo service apache2 restart
+```
 
 <!-- Resource Links -->
 [1.0]:http://ec2-52-32-196-18.us-west-2.compute.amazonaws.com/
